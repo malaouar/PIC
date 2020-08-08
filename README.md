@@ -1,7 +1,7 @@
 # PIC
 The 16F84 family
 
-Pics (Peripheral Interface Controller) from Microchip are, perhaps, the most popular microcontrollers. The most useful feature of this microcontrollers is that they are flash based (so they can be re-programmed many times), cheap, robust .....
+PICs (Peripheral Interface Controller) from Microchip are, perhaps, the most popular microcontrollers. The most useful feature of this microcontrollers is that they are flash based (so they can be re-programmed many times), cheap, robust .....
 
 16F84 is a minimalist uC which is ideal to start learning microcontrollers. There are tons of ressources for this uC (tutos, simulators, circuits .....) on the web.
 Pinguino is an Arduino-like electronics prototyping platform. It supports different PIC icrocontrollers, all with built-in USB module (no FTDI chip !).
