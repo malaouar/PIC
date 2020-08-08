@@ -1,0 +1,933 @@
+;	RCS Header $Id: fp24.a16 2.7 1996/10/07 13:50:29 F.J.Testa Exp $
+
+;	$Revision: 2.7 $
+
+;       PIC16 24 BIT FLOATING POINT LIBRARY
+;
+;       Unary operations: both input and output are in AEXP,AARG
+;
+;       Binary operations: input in AEXP,AARG and BEXP,BARG with output in AEXP,AARG
+;
+;       All routines return WREG = 0x00 for successful completion, and WREG = 0xFF
+;       for an error condition specified in FPFLAGS.
+;
+;       All timings are worst case cycle counts
+;
+;         Routine               Function
+;
+;       FLO1624 16 bit integer to 24 bit floating point conversion
+;       FLO24
+;
+;               Timing:            RND
+;                               0       1
+;
+;                       0       83      83
+;                  SAT
+;                       1       88      88
+;
+;       NRM2424         24 bit normalization of unnormalized 24 bit floating point numbers
+;       NRM24
+;
+;               Timing:            RND
+;                               0       1
+;
+;                       0       72      72
+;                  SAT
+;                       1       77      77
+;
+;       INT2416         24 bit floating point to 16 bit integer conversion
+;       INT24
+;
+;               Timing:            RND
+;                               0       1
+;
+;                       0       83      89
+;                  SAT
+;                       1       83      92
+;
+;       FLO2424         24 bit integer to 24 bit floating point conversion
+;
+;               Timing:            RND
+;                               0       1
+;
+;                       0       108     117
+;                  SAT
+;                       1       108     123
+;
+;       NRM3224   32 bit normalization of unnormalized 24 bit floating point numbers
+;
+;               Timing:            RND
+;                               0       1
+;
+;                       0       94      103
+;                  SAT
+;                       1       94      109
+;
+;       INT2424         24 bit floating point to 24 bit integer conversion
+;
+;               Timing:            RND
+;                               0       1
+;
+;                       0       105      113
+;                  SAT
+;                       1       105      115
+;
+;       FPA24           24 bit floating point add
+;
+;               Timing:            RND
+;                               0       1
+;
+;                       0       197     208
+;                  SAT
+;                       1       197     213
+;
+;       FPS24           24 bit floating point subtract
+;
+;               Timing:            RND
+;                               0       1
+;
+;                       0       199     240
+;                  SAT
+;                       1       199     215
+;
+;       FPM24           24 bit floating point multiply
+;
+;               Timing:            RND
+;                               0       1
+;
+;                       0       298     309
+;                  SAT
+;                       1       298     313
+;
+;       FPD24           24 bit floating point divide
+;
+;               Timing:            RND
+;                               0       1
+;
+;                       0       472     494
+;                  SAT
+;                       1       472     498
+;
+
+
+;**********************************************************************************************
+;**********************************************************************************************
+;
+;       24 bit floating point representation
+;
+;       EXPONENT        8 bit biased exponent
+;                       It is important to note that the use of biased exponents produces
+;                       a unique representation of a floating point 0, given by
+;                       EXP = HIGHBYTE = LOWBYTE = 0x00, with 0 being the only
+;                       number with EXP = 0.
+;
+;       HIGHBYTE        8 bit most significant byte of fraction in sign-magnitude representation,
+;                       with SIGN = MSB, implicit MSB = 1 and radix point to the right of MSB
+;
+;       LOWBYTE         8 bit least significant byte of sign-magnitude fraction
+;
+;       EXPONENT        HIGHBYTE        LOWBYTE
+;
+;       xxxxxxxx        S.xxxxxxx       xxxxxxxx
+;
+;                        |
+;                      RADIX
+;                      POINT
+;
+
+;**********************************************************************************************
+
+;**********************************************************************************************
+
+;       Normalization routine
+
+;       Input:  24 bit unnormalized floating point number in AEXP, AARGB0, AARGB1,
+;               with sign in SIGN,MSB and other bits zero.
+
+;       Use:    CALL    NRM2424 or      CALL    NRM24
+
+;       Output: 24 bit normalized floating point number in AEXP, AARGB0, AARGB1
+
+;       Result: AARG  <--  NORMALIZE( AARG )
+
+;       Max Timing:     10+6+7*7+7 = 72 clks            SAT = 0
+;                       10+6+7*7+1+11 = 77 clks SAT = 1
+
+;       Min Timing:     14 clks                         AARG = 0
+;                       5+9+4 = 18 clks
+
+;       PM: 26                                          DM: 6
+
+;----------------------------------------------------------------------------------------------
+
+NRM2424
+NRM24
+		CLRF            TEMP			; clear exponent decrement
+                MOVF            AARGB0,W		; test if highbyte=0
+                BTFSS           _Z
+                GOTO            NORM2424
+                MOVF            AARGB1,W		; if so, shift 8 bits by move
+                MOVWF           AARGB0
+                BTFSC           _Z			; if highbyte=0, result=0
+                GOTO            RES024
+                CLRF            AARGB1
+                BSF             TEMP,3
+
+NORM2424        MOVF            TEMP,W
+                SUBWF           EXP,F
+                BTFSS           _Z
+                BTFSS           _C
+                GOTO            SETFUN24
+
+                BCF             _C			; clear carry bit
+
+NORM2424A       BTFSC           AARGB0,MSB		; if MSB=1, normalization done
+                GOTO            FIXSIGN24
+                RLF             AARGB1,F		; otherwise, shift left and 
+                RLF             AARGB0,F		; decrement EXP
+                DECFSZ          EXP,F
+                GOTO            NORM2424A
+
+                GOTO            SETFUN24                ; underflow if EXP=0
+
+FIXSIGN24       BTFSS           SIGN,MSB
+                BCF             AARGB0,MSB		; clear explicit MSB if positive
+                RETLW           0
+
+RES024          CLRF            AARGB0			; result equals zero
+                CLRF            AARGB1
+		CLRF		AARGB2			; clear extended byte
+                CLRF            EXP
+                RETLW           0
+
+
+;**********************************************************************************************
+;**********************************************************************************************
+
+;       Integer to float conversion
+
+;       Input:  24 bit 2's complement integer right justified in AARGB0, AARGB1, AARGB2
+
+;       Use:    CALL    FLO2424
+
+;       Output: 24 bit floating point number in AEXP, AARGB0, AARGB1
+
+;       Result: AARG  <--  FLOAT( AARG )
+
+;       Max Timing:     14+94 = 108 clks                RND = 0
+;                       14+103 = 117 clks               RND = 1, SAT = 0
+;                       14+109 = 123 clks               RND = 1, SAT = 1
+
+;       Min Timing:     6+28 = 34 clks                  AARG = 0
+;                       6+22 = 28 clks
+
+;       PM: 14+51 = 65                                  DM: 7
+
+;----------------------------------------------------------------------------------------------
+
+FLO2424         MOVLW           D'23'+EXPBIAS		; initialize exponent and add bias
+                MOVWF           EXP
+                CLRF            SIGN
+                BTFSS           AARGB0,MSB		; test sign
+                GOTO            NRM3224
+                COMF            AARGB2,F		; if < 0, negate and set MSB in SIGN
+                COMF            AARGB1,F
+                COMF            AARGB0,F
+                INCF            AARGB2,F
+                BTFSC           _Z
+                INCF            AARGB1,F
+                BTFSC           _Z
+                INCF            AARGB0,F
+                BSF             SIGN,MSB
+
+;**********************************************************************************************
+
+;       Normalization routine
+
+;       Input:  32 bit unnormalized floating point number in AEXP, AARGB0, AARGB1,
+;               AARGB2, with sign in SIGN,MSB
+
+;       Use:    CALL    NRM3224
+
+;       Output: 24 bit normalized floating point number in AEXP, AARGB0, AARGB1
+
+;       Result: AARG  <--  NORMALIZE( AARG )
+
+;       Max Timing:     21+6+7*8+7+4 = 94 clks  RND = 0
+;                       21+6+7*8+20+4 = 103 clks        RND = 1, SAT = 0
+;                       21+6+7*8+19+11 = 109 clks       RND = 1, SAT = 1
+
+;       Min Timing:     22+6 = 28 clks                  AARG = 0
+;                       5+9+4+4 = 22 clks
+
+;       PM: 51                                          DM: 7
+
+;----------------------------------------------------------------------------------------------
+
+NRM3224         CLRF            TEMP                    ; clear exponent decrement
+                MOVF            AARGB0,W		; test if highbyte=0
+                BTFSS           _Z
+                GOTO            NORM3224
+                MOVF            AARGB1,W		; if so, shift 8 bits by move
+                MOVWF           AARGB0
+                MOVF            AARGB2,W
+                MOVWF           AARGB1
+                CLRF            AARGB2
+                BSF             TEMP,3                  ; increase decrement by 8
+
+                MOVF            AARGB0,W		; test if highbyte=0
+                BTFSS           _Z
+                GOTO            NORM3224
+                MOVF            AARGB1,W		; if so, shift 8 bits by move
+                MOVWF           AARGB0
+                CLRF            AARGB1
+                BCF             TEMP,3                  ; increase decrement by 8
+                BSF             TEMP,4
+        
+                MOVF            AARGB0,W		; if highbyte=0, result=0
+                BTFSC           _Z
+                GOTO            RES024
+
+NORM3224        MOVF            TEMP,W
+                SUBWF           EXP,F
+                BTFSS           _Z
+                BTFSS           _C
+                GOTO            SETFUN24
+
+                BCF             _C                      ; clear carry bit
+
+NORM3224A       BTFSC           AARGB0,MSB		; if MSB=1, normalization done
+                GOTO            NRMRND3224
+                RLF             AARGB2,F		; otherwise, shift left and 
+                RLF             AARGB1,F		; decrement EXP
+                RLF             AARGB0,F
+                DECFSZ          EXP,F
+                GOTO            NORM3224A
+                GOTO            SETFUN24                ; underflow if EXP=0
+
+NRMRND3224      BTFSC           FPFLAGS,RND
+                BTFSS           AARGB1,LSB
+                GOTO            FIXSIGN24
+		BTFSS		AARGB2,MSB		; round if next bit is set
+                GOTO            FIXSIGN24
+		INCF		AARGB1,F
+                BTFSC           _Z
+                INCF            AARGB0,F
+
+                BTFSS           _Z                     ; has rounding caused carryout?
+                GOTO            FIXSIGN24
+                RRF             AARGB0,F		; if so, right shift
+                RRF             AARGB1,F
+                INCF            EXP,F
+                BTFSC           _Z                     ; check for overflow
+                GOTO            SETFOV24
+                GOTO            FIXSIGN24
+
+
+
+
+;**********************************************************************************************
+;**********************************************************************************************
+
+;       Float to integer conversion
+
+;       Input:  24 bit floating point number in AEXP, AARGB0, AARGB1
+
+;       Use:    CALL    INT2424
+
+;       Output: 24 bit 2's complement integer right justified in AARGB0, AARGB1, AARGB2
+
+;       Result: AARG  <--  INT( AARG )
+
+;       Max Timing:     41+6*7+6+16 = 105 clks		RND = 0
+;                       41+6*7+6+24 = 113 clks		RND = 1, SAT = 0
+;                       41+6*7+6+26 = 115 clks  	RND = 1, SAT = 1
+
+;       Min Timing:     5 clks
+
+;       PM: 82                                          DM: 6
+
+;----------------------------------------------------------------------------------------------
+
+INT2424
+                CLRF            AARGB2
+		MOVF		EXP,W			; test for zero argument
+		BTFSC		_Z
+		RETLW		0x00
+
+		MOVF            AARGB0,W		; save sign in SIGN
+                MOVWF           SIGN
+                BSF             AARGB0,MSB		; make MSB explicit
+
+                MOVLW           EXPBIAS+D'23'		; remove bias from EXP
+                SUBWF           EXP,F
+                BTFSS           EXP,MSB
+                GOTO            SETIOV24        
+		COMF		EXP,F
+		INCF		EXP,F        
+
+                MOVLW           8                       ; do byte shift if EXP >= 8
+                SUBWF           EXP,W
+                BTFSS           _C
+                GOTO            TSHIFT2424
+                MOVWF           EXP
+                RLF             AARGB2,F		; rotate next bit for rounding
+                MOVF            AARGB1,W
+                MOVWF           AARGB2
+                MOVF            AARGB0,W
+                MOVWF           AARGB1
+                CLRF            AARGB0
+
+                MOVLW           8                       ; do another byte shift if EXP >= 8
+                SUBWF           EXP,W
+                BTFSS           _C
+                GOTO            TSHIFT2424
+                MOVWF           EXP
+                RLF             AARGB2,F		; rotate next bit for rounding
+                MOVF            AARGB1,W
+                MOVWF           AARGB2
+                CLRF            AARGB1
+
+                MOVLW           8                       ; do another byte shift if EXP >= 8
+                SUBWF           EXP,W
+                BTFSS           _C
+                GOTO            TSHIFT2424
+                MOVWF           EXP
+                RLF             AARGB2,F		; rotate next bit for rounding
+                CLRF            AARGB2
+		MOVF		EXP,W
+		BTFSS		_Z
+		BCF		_C
+		GOTO		SHIFT2424OK
+
+TSHIFT2424      MOVF            EXP,W                   ; shift completed if EXP = 0
+                BTFSC           _Z
+                GOTO            SHIFT2424OK
+
+SHIFT2424       BCF             _C
+                RRF             AARGB0,F		; right shift by EXP
+                RRF             AARGB1,F
+                RRF             AARGB2,F
+                DECFSZ          EXP,F
+                GOTO            SHIFT2424
+
+SHIFT2424OK     BTFSC           FPFLAGS,RND
+                BTFSS           AARGB2,LSB
+                GOTO            INT2424OK
+                BTFSS           _C
+                GOTO            INT2424OK
+                INCF            AARGB2,F
+                BTFSC           _Z
+                INCF            AARGB1,F
+                BTFSC           _Z
+                INCF            AARGB0,F
+                BTFSC           AARGB0,MSB		; test for overflow
+                GOTO            SETIOV24
+
+INT2424OK       BTFSS           SIGN,MSB                ; if sign bit set, negate               
+                RETLW           0
+                COMF            AARGB0,F
+                COMF            AARGB1,F
+                COMF            AARGB2,F
+                INCF            AARGB2,F
+                BTFSC           _Z
+                INCF            AARGB1,F
+                BTFSC           _Z
+                INCF            AARGB0,F
+                RETLW           0
+
+IRES024         CLRF            AARGB0			; integer result equals zero
+                CLRF            AARGB1
+                CLRF            AARGB2
+                RETLW           0
+
+SETIOV24        BSF             FPFLAGS,IOV             ; set integer overflow flag
+                BTFSS           FPFLAGS,SAT             ; test for saturation
+                RETLW           0xFF                    ; return error code in WREG
+
+                CLRF            AARGB0			; saturate to largest two's
+                BTFSS           SIGN,MSB                ; complement 24 bit integer
+                MOVLW           0xFF
+                MOVWF           AARGB0			; SIGN = 0, 0x 7F FF FF
+                MOVWF           AARGB1			; SIGN = 1, 0x 80 00 00
+                MOVWF           AARGB2
+                RLF             SIGN,F
+                RRF             AARGB0,F
+                RETLW           0xFF                    ; return error code in WREG
+
+
+
+;**********************************************************************************************
+;**********************************************************************************************
+
+;       Floating Point Multiply
+
+;       Input:  24 bit floating point number in AEXP, AARGB0, AARGB1
+;               24 bit floating point number in BEXP, BARGB0, BARGB1
+
+;       Use:    CALL    FPM24
+
+;       Output: 24 bit floating point product in AEXP, AARGB0, AARGB1
+
+;       Result: AARG  <--  AARG * BARG
+
+;       Max Timing:     25+15*16+15+18 = 298 clks       RND = 0
+;                       25+15*16+15+29 = 309 clks       RND = 1, SAT = 0
+;                       25+15*16+15+33 = 313 clks       RND = 1, SAT = 1
+
+;       Min Timing:     6+5 = 11 clks                   AARG * BARG = 0
+;                       24+15*11+14+15 = 218 clks
+
+;       PM: 80                                  DM: 11
+
+;----------------------------------------------------------------------------------------------
+
+FPM24           MOVF            AEXP,W                  ; test for zero arguments
+                BTFSS           _Z
+                MOVF            BEXP,W
+                BTFSC           _Z
+                GOTO            RES024
+
+M24BNE0         MOVF            AARGB0,W
+                XORWF           BARGB0,W
+                MOVWF           SIGN                    ; save sign in SIGN
+
+                MOVF            BEXP,W
+                ADDWF           EXP,F
+                MOVLW           EXPBIAS-1
+                BTFSS           _C
+                GOTO            MTUN24
+
+                SUBWF           EXP,F
+                BTFSC           _C
+                GOTO            SETFOV24                ; set multiply overflow flag
+                GOTO            MOK24
+
+MTUN24          SUBWF           EXP,F
+                BTFSS           _C
+                GOTO            SETFUN24
+
+MOK24
+                MOVF            AARGB0,W
+                MOVWF           AARGB2			; move result to AARG
+                MOVF            AARGB1,W
+                MOVWF           AARGB3
+		BSF             AARGB2,MSB		; make argument MSB's explicit
+                BSF             BARGB0,MSB
+                BCF             _C
+                CLRF            AARGB0			; clear initial partial product
+                CLRF            AARGB1
+                MOVLW           D'16'
+                MOVWF           TEMP                    ; initialize counter
+
+MLOOP24         BTFSS           AARGB3,LSB		; test next bit
+                GOTO            MNOADD24
+
+MADD24          MOVF            BARGB1,W
+                ADDWF           AARGB1,F
+                MOVF            BARGB0,W
+                BTFSC           _C
+                INCFSZ          BARGB0,W
+                ADDWF           AARGB0,F
+
+MNOADD24        RRF             AARGB0,F
+                RRF             AARGB1,F
+                RRF             AARGB2,F
+                RRF             AARGB3,F
+                BCF             _C
+                DECFSZ          TEMP,F
+                GOTO            MLOOP24
+
+                BTFSC           AARGB0,MSB		; check for postnormalization
+                GOTO            MROUND24
+                RLF             AARGB2,F
+                RLF             AARGB1,F
+                RLF             AARGB0,F
+                DECF            EXP,F
+
+MROUND24        BTFSC           FPFLAGS,RND
+                BTFSS           AARGB1,LSB
+                GOTO            MUL24OK
+		BTFSS		AARGB2,MSB		; round if next bit is set
+                GOTO            MUL24OK
+		INCF		AARGB1,F
+                BTFSC           _Z
+                INCF            AARGB0,F
+
+                BTFSS           _Z                      ; has rounding caused carryout?
+                GOTO            MUL24OK
+                RRF             AARGB0,F		; if so, right shift
+                RRF             AARGB1,F
+                INCF            EXP,F
+                BTFSC           _Z                      ; check for overflow
+                GOTO            SETFOV24
+
+MUL24OK         BTFSS           SIGN,MSB
+                BCF             AARGB0,MSB		; clear explicit MSB if positive
+
+                RETLW           0  
+
+SETFOV24        BSF             FPFLAGS,FOV             ; set floating point underflag
+                BTFSS           FPFLAGS,SAT             ; test for saturation
+                RETLW           0xFF                    ; return error code in WREG
+
+                MOVLW           0xFF
+                MOVWF           AEXP                    ; saturate to largest floating
+                MOVWF           AARGB0			; point number = 0x FF 7F FF
+                MOVWF           AARGB1			; modulo the appropriate sign bit
+                RLF             SIGN,F
+                RRF             AARGB0,F
+                RETLW           0xFF                    ; return error code in WREG
+
+;**********************************************************************************************
+;**********************************************************************************************
+
+;       Floating Point Divide
+
+;       Input:  24 bit floating point dividend in AEXP, AARGB0, AARGB1
+;               24 bit floating point divisor in BEXP, BARGB0, BARGB1
+
+;       Use:    CALL    FPD24
+
+;       Output: 24 bit floating point quotient in AEXP, AARGB0, AARGB1
+
+;       Result: AARG  <--  AARG / BARG
+
+;       Max Timing:     32+13+15*26+25+12 = 472 clks    RND = 0
+;                       32+13+15*26+25+34 = 494 clks    RND = 1, SAT = 0
+;                       32+13+15*26+25+38 = 498 clks    RND = 1, SAT = 1
+
+;       Min Timing:     7+5 = 12 clks
+
+;       PM: 120                                 DM: 11
+
+;----------------------------------------------------------------------------------------------
+
+FPD24           MOVF            BEXP,W                  ; test for divide by zero
+                BTFSC           _Z
+                GOTO            SETFDZ24
+
+                MOVF            AEXP,W
+                BTFSC           _Z
+                GOTO            RES024
+
+D24BNE0         MOVF            AARGB0,W
+                XORWF           BARGB0,W
+                MOVWF           SIGN                    ; save sign in SIGN
+                BSF             AARGB0,MSB		; make argument MSB's explicit
+                BSF             BARGB0,MSB
+
+TALIGN24        CLRF            TEMP                    ; clear align increment
+                MOVF            AARGB0,W
+                MOVWF           AARGB2			; test for alignment
+                MOVF            AARGB1,W
+                MOVWF           AARGB3
+
+                MOVF            BARGB1,W
+                SUBWF           AARGB3, f
+                MOVF            BARGB0,W
+                BTFSS           _C
+                INCFSZ          BARGB0,W
+                SUBWF           AARGB2, f
+
+                CLRF            AARGB2
+                CLRF            AARGB3
+
+                BTFSS           _C
+                GOTO            DALIGN24OK
+
+                BCF             _C                      ; align if necessary
+                RRF             AARGB0,F
+                RRF             AARGB1,F
+                RRF             AARGB2,F
+                MOVLW           0x01
+                MOVWF           TEMP                    ; save align increment          
+
+DALIGN24OK      MOVF            BEXP,W                  ; compare AEXP and BEXP
+                SUBWF           EXP,F
+                BTFSS           _C
+                GOTO            ALTB24
+        
+AGEB24          MOVLW           EXPBIAS-1
+                ADDWF           TEMP,W
+                ADDWF           EXP,F
+                BTFSC           _C
+                GOTO            SETFOV24
+                GOTO            DARGOK24                ; set overflow flag
+
+ALTB24          MOVLW           EXPBIAS-1
+                ADDWF           TEMP,W
+                ADDWF           EXP,F
+                BTFSS           _C
+                GOTO            SETFUN24                ; set underflow flag
+
+DARGOK24        MOVLW           D'16'			; initialize counter
+                MOVWF           TEMPB1
+
+DLOOP24         RLF             AARGB3,F		; left shift
+                RLF             AARGB2,F
+                RLF             AARGB1,F
+                RLF             AARGB0,F
+                RLF             TEMP,F
+
+                MOVF            BARGB1,W		; subtract
+                SUBWF           AARGB1,F
+                MOVF            BARGB0,W
+                BTFSS           _C
+                INCFSZ          BARGB0,W
+                SUBWF           AARGB0,F
+
+                RLF             BARGB0,W
+                IORWF           TEMP,F
+                
+                BTFSS           TEMP,LSB                ; test for restore
+                GOTO            DREST24
+
+                BSF             AARGB3,LSB
+                GOTO            DOK24
+
+DREST24         MOVF            BARGB1,W		; restore if necessary
+                ADDWF           AARGB1,F
+                MOVF            BARGB0,W
+                BTFSC           _C
+                INCF            BARGB0,W
+                ADDWF           AARGB0,F
+                BCF             AARGB3,LSB
+
+DOK24           DECFSZ          TEMPB1,F
+                GOTO            DLOOP24
+
+DROUND24        BTFSC           FPFLAGS,RND
+                BTFSS           AARGB3,LSB
+                GOTO            DIV24OK
+                BCF             _C
+                RLF             AARGB1,F		; compute next significant bit
+                RLF             AARGB0,F		; for rounding
+                RLF             TEMP,F
+
+                MOVF            BARGB1,W		; subtract
+                SUBWF           AARGB1,F
+                MOVF            BARGB0,W
+                BTFSS           _C
+                INCFSZ          BARGB0,W
+                SUBWF           AARGB0,F
+
+                RLF             BARGB0,W
+                IORWF           TEMP,W
+                ANDLW           0x01            
+
+                ADDWF           AARGB3,F
+                BTFSC           _C
+                INCF            AARGB2,F
+
+                BTFSS           _Z                      ; test if rounding caused carryout
+                GOTO            DIV24OK
+                RRF             AARGB2,F
+                RRF             AARGB3,F
+                INCF            EXP,F
+                BTFSC           _Z                      ; test for overflow
+                GOTO            SETFOV24
+
+DIV24OK         BTFSS           SIGN,MSB
+                BCF             AARGB2,MSB		; clear explicit MSB if positive
+
+                MOVF            AARGB2,W
+                MOVWF           AARGB0			; move result to AARG
+                MOVF            AARGB3,W
+                MOVWF           AARGB1
+
+                RETLW           0
+
+SETFUN24        BSF             FPFLAGS,FUN             ; set floating point underflag
+                BTFSS           FPFLAGS,SAT             ; test for saturation
+                RETLW           0xFF                    ; return error code in WREG
+
+                MOVLW           0x01                    ; saturate to smallest floating
+                MOVWF           AEXP                    ; point number = 0x 01 00 00
+                CLRF            AARGB0			; modulo the appropriate sign bit
+                CLRF            AARGB1
+                RLF             SIGN,F
+                RRF             AARGB0,F
+                RETLW           0xFF                    ; return error code in WREG
+
+SETFDZ24        BSF             FPFLAGS,FDZ             ; set divide by zero flag
+                RETLW           0xFF
+
+;**********************************************************************************************
+;**********************************************************************************************
+
+;       Floating Point Subtract
+
+;       Input:  24 bit floating point number in AEXP, AARGB0, AARGB1
+;               24 bit floating point number in BEXP, BARGB0, BARGB1
+
+;       Use:    CALL FPS24
+
+;       Output: 24 bit floating point sum in AEXP, AARGB0, AARGB1
+
+;       Result: AARG  <--  AARG - BARG
+
+;       Max Timing:     2+197 = 199 clks                RND = 0
+;                       2+208 = 210 clks                RND = 1, SAT = 0
+;                       2+213 = 215 clks                RND = 1, SAT = 1
+
+;       Min Timing:     2+12 = 14 clks
+
+;       PM: 2+112 = 114                         DM: 11
+
+;----------------------------------------------------------------------------------------------
+
+FPS24           MOVLW           0x80
+                XORWF           BARGB0,F
+
+;**********************************************************************************************
+
+;       Floating Point Add
+
+;       Input:  24 bit floating point number in AEXP, AARGB0, AARGB1
+;               24 bit floating point number in BEXP, BARGB0, BARGB1
+
+;       Use:    CALL FPA24
+
+;       Output: 24 bit floating point sum in AEXP, AARGB0, AARGB1
+
+;       Result: AARG  <--  AARG - BARG
+
+;       Max Timing:     25+28+6*6+5+31+72 = 197 clks            RND = 0
+;                       25+28+6*6+5+42+72 = 208 clks            RND = 1, SAT = 0
+;                       25+28+6*6+5+42+77 = 213 clks            RND = 1, SAT = 1
+
+;       Min Timing:     8+4 = 12 clks
+
+;       PM: 112                                                 DM: 11
+
+;----------------------------------------------------------------------------------------------
+
+FPA24           MOVF            AARGB0,W		; exclusive or of signs in TEMP
+                XORWF           BARGB0,W
+                MOVWF           TEMP
+
+		CLRF		AARGB2			; clear extended byte
+		CLRF		BARGB2
+
+                MOVF            AEXP,W                  ; use AARG if AEXP >= BEXP
+                SUBWF           BEXP,W
+                BTFSS           _C
+                GOTO            USEA24
+
+                MOVF            BEXP,W                  ; use BARG if AEXP < BEXP
+                MOVWF           AARGB4			; therefore, swap AARG and BARG
+                MOVF            AEXP,W
+                MOVWF           BEXP
+                MOVF            AARGB4,W
+                MOVWF           AEXP
+
+                MOVF            BARGB0,W
+                MOVWF           AARGB4
+                MOVF            AARGB0,W
+                MOVWF           BARGB0
+                MOVF            AARGB4,W
+                MOVWF           AARGB0
+
+                MOVF            BARGB1,W
+                MOVWF           AARGB4
+                MOVF            AARGB1,W
+                MOVWF           BARGB1
+                MOVF            AARGB4,W
+                MOVWF           AARGB1
+
+USEA24          MOVF            BEXP,W                  ; return AARG if BARG = 0
+                BTFSC           _Z
+                RETLW           0x00
+
+                MOVF            AARGB0,W
+                MOVWF           SIGN                    ; save sign in SIGN
+                BSF             AARGB0,MSB		; make MSB's explicit
+                BSF             BARGB0,MSB
+
+                MOVF            BEXP,W                  ; compute shift count in BEXP
+                SUBWF           AEXP,W
+                MOVWF           BEXP
+                BTFSC           _Z
+                GOTO            ALIGNED24
+
+                MOVLW           8
+                SUBWF           BEXP,W
+                BTFSS           _C                      ; if BEXP >= 8, do byte shift
+                GOTO            ALIGNB24
+                MOVWF           BEXP
+                MOVF            BARGB1,W		; keep for postnormalization
+		MOVWF		BARGB2
+                MOVF            BARGB0,W
+		MOVWF		BARGB1
+                CLRF            BARGB0
+
+                MOVLW           8
+                SUBWF           BEXP,W
+                BTFSS           _C                      ; if BEXP >= 8, BARG = 0 relative to AARG
+                GOTO            ALIGNB24
+                MOVF            SIGN,W
+                MOVWF           AARGB0
+                RETLW           0x00
+
+ALIGNB24        MOVF            BEXP,W                  ; already aligned if BEXP = 0
+                BTFSC           _Z
+                GOTO            ALIGNED24
+
+ALOOPB24        BCF             _C                      ; right shift by BEXP
+                RRF             BARGB0,F
+                RRF             BARGB1,F
+		RRF		BARGB2,F
+                DECFSZ          BEXP,F
+                GOTO            ALOOPB24
+
+ALIGNED24       BTFSS           TEMP,MSB                ; negate if signs opposite
+                GOTO            AOK24
+		COMF		BARGB2,F
+                COMF            BARGB1,F
+                COMF            BARGB0,F
+                INCF            BARGB2,F
+                BTFSC           _Z
+                INCF            BARGB1,F
+		BTFSC		_Z
+		INCF		BARGB0,F
+
+AOK24
+                MOVF    	BARGB2,W
+                ADDWF   	AARGB2,F
+                MOVF            BARGB1,W
+                BTFSC           _C
+                INCFSZ          BARGB1,W
+                ADDWF           AARGB1,F
+                MOVF            BARGB0,W
+                BTFSC           _C
+                INCFSZ          BARGB0,W
+                ADDWF           AARGB0,F
+
+                BTFSC           TEMP,MSB
+                GOTO            ACOMP24
+                BTFSS           _C
+                GOTO            NRMRND3224
+
+                RRF             AARGB0,F		; shift right and increment EXP
+                RRF             AARGB1,F
+		RRF		AARGB2,F
+                INCFSZ          AEXP,F
+                GOTO            NRMRND3224
+                GOTO            SETFOV24
+
+ACOMP24         BTFSC           _C
+                GOTO            NRM3224			; normalize and fix sign
+
+		COMF		AARGB2,F
+                COMF            AARGB1,F		; negate, toggle sign bit and
+                COMF            AARGB0,F		; then normalize
+                INCF            AARGB2,F
+                BTFSC           _Z
+                INCF            AARGB1,F
+                BTFSC           _Z
+                INCF            AARGB0,F
+
+                MOVLW           0x80
+                XORWF           SIGN,F
+                GOTO            NRM24

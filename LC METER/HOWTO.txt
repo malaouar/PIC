@@ -1,0 +1,57 @@
+ !!!!!!!!!!!!!!!!!! COPIED FROM SOMEWHERE ON THE WEB !!!!!!!!!!!!!!!
+
+Getting Started:
+---------------
+For best accuracy, the free running frequency should be 10% to 15% below 655KHz. If it is too close, it may accidentally overflow the PIC's internal 16 bit count. You may need to adjust the inductance to get get the frequency right..
+
+When the calibration capacitor is connected, the oscillator should run at about 394KHz.
+
+Operation:
+---------
+In practice, it's a bit like an ohm meter. For an inductor, just short the leads and press the zero button, then connect the unknown inductor. For a capacitor, zero it with the leads open, then connect the unknown capacitor.
+
+The meter can be zeroed with an unknown component connected. For subsequent components, it then indicates the difference (+ or -) from the original component value. Great for matching parts!
+
+How Accurate?
+------------
+Accuracy depends on the user doing the "right thing" and on the unknown component being of fairly high Q. The PIC's internal program relies on the setting of the L/C switch being appropriate for the component. Since all the PIC is doing is measuring the frequency of the oscillator, any strange component that allows the oscillator to work will be reported as an inductor or a capacitor depending on the L/C switch. For example a 22 Ohm resistor is reported as a 3.14uH inductor or a 119nF (0.119uF) capacitor. This isn't even remotely correct!
+
+When the unknown component has high Q (as you usually want in a tuned circuit) AND the L/C switch is set correctly, the prototype generally shows errors of less than 1%.
+
+While the LC Meter is self calibrating, errors depend a little on the components used in the oscillator LC tank (L and C on the circuit diagram) and on the "standard" capacitor (Ccal), which should be 1000pF to within 1% or better.
+
+The worst errors occurred when using a ferrite bobbin style choke from a switchmode power supply for "L". Here the error was less than 1% for capacitors below 3300pF and 2% for inductors less than 475uH. The error climbed to 3% for 0.22uF capacitors.
+
+In all cases, use a 1000pF styroseal capacitor for the oscillator tank "C". A "greencap" would be a suitable substitute but a ceramic capacitor may not be a good choice. Some of these can have high losses.
+
+
+Special Components:
+------------------
+No particularly accurate components are required, except for one (or more) accurately known "external" capacitors used to calibrate the meter.
+
+    - The two 1000pF capacitors should be fairly good quality. Polystyrene are preferred. MKT are fine. Greencaps tend to drift in value too much. Avoid ceramic capacitors. Some of these can have high losses (and it is hard to tell).
+
+    - The two 10uF capacitors in the oscillator should be tantalum (for low series resistance/inductance).
+
+    - The 4MHz crystal should be a genuine 4.000MHz one, not something approximate to 4MHz. Every 1% error in crystal frequency adds 2% error to the indicated inductance value.
+
+* If using relay:
+    - The relay should be a low current one. The PIC can only provide about 30mA of drive current.
+    - Don't forget the "catch" diode across the relay coil!
+    
+
+Calibration Instructions:
+-------------------------
+   - Apply power carefully. The current should be below 20mA. If you see nothing on the display and everything else checks out OK, try adjusting the Contrast trimpot. The display should briefly show the word Calibrating, then C=0.0pF (or some other capacitance up to +/- 10pF ).
+
+   - Allow several minutes "warm-up", then press the "zero" button to force a re-calibration. The display should now show C=0.0pF.
+
+   - Connect your "standard" capacitor. The LC meter should read somewhere near its value (with up to +/- 10% error).
+
+  -  Experts may like to adjust the inductor value to raise F1 to near 00060000 to obtain maximum resolution from the meter. 
+
+   - The Inductance measuring function is automatically calibrated when you calibrate the capacitance function. All the testing required is to check that the meter can be "zeroed" with the terminals shorted together.   
+      
+Conclusion:
+----------
+With the aid of a little easily copied FREE software, you can have your own (possibly) accurate inductance and capacitance meter. With the worst possible set of components from the junk box, accuracy should be better than 3%. If you are lucky, accuracy should generally be better than 1%.
